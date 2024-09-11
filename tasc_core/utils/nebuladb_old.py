@@ -1,6 +1,6 @@
 from psycopg2 import connect
 from pandas import DataFrame, read_sql_query
-from pandas.io.sql import DatabaseError, get_schema
+from pandas.io.sql import get_schema
 from re import sub
 from io import StringIO
 
@@ -51,18 +51,19 @@ class NebulaConnector:
         self._close_conn()
 
     def create_from_df(self, table_name: str, df: DataFrame) -> None:
-        """CREATE table in NEBULA tasc-sandbox and insert a Pandas DataFrame. The table format created will mirror the dataframe types.
+        """CREATE table in NEBULA tasc_prod and insert a Pandas DataFrame. The table format created will mirror
+        the dataframe types.
 
         Args:
-            table_name (str): name of table you want to create. does not need the "tasc-sandbox." prefix
+            table_name (str): name of table you want to create. does not need the "tasc_prod." prefix
             df (DataFrame):  Dataframe you want to upload.
         """
 
-        # this upload method does not expect the "tasc-sandbox." prefix. Remove it if it exists.
-        table_name = sub("tasc-sandbox.", '', table_name)
+        # this upload method does not expect the "tasc_prod." prefix. Remove it if it exists.
+        table_name = sub("tasc_prod.", '', table_name)
 
         # use pandas get_schema method to generate original create table SQL
-        create_table_sql = get_schema(df, "tasc-sandbox." + table_name)
+        create_table_sql = get_schema(df, "tasc_prod." + table_name)
 
         # get_schema adds quotation marks around the table name, which we don't want
         create_table_sql = sub('"', '', create_table_sql, 2)
@@ -70,10 +71,11 @@ class NebulaConnector:
         self.execute_query(create_table_sql)
 
     def insert_df(self, table_name: str, df: DataFrame) -> None:
-        """INSERT DataFrame as new records into an NEBULA tasc-sandbox table. Make sure you have INSERT permissions on the table you're inserting into.
+        """INSERT DataFrame as new records into an NEBULA tasc_prod table. Make sure you have INSERT permissions
+        on the table you're inserting into.
 
         Args:
-            table_name (str): name of table you want to insert into. Does not need the "tasc-sandbox." prefix.
+            table_name (str): name of table you want to insert into. Does not need the "tasc_prod." prefix.
             df (DataFrame): Dataframe you want to insert
         """
 
@@ -81,8 +83,8 @@ class NebulaConnector:
             print('df empty, nothing to insert')
             return None
 
-        # this upload method does not expect the "tasc-sandbox." prefix. Remove it if it exists.
-        table_name = sub("tasc-sandbox.", '', table_name)
+        # this upload method does not expect the "tasc_prod." prefix. Remove it if it exists.
+        table_name = sub("tasc_prod.", '', table_name)
 
         # create the table if it doesn't exist already
         self.create_from_df(table_name, df)
@@ -93,7 +95,7 @@ class NebulaConnector:
             buffer = StringIO()
             df.to_csv(buffer, index=False, header=False)
             buffer.seek(0)
-            self.cursor.execute('SET search_path TO tasc-sandbox')
+            self.cursor.execute('SET search_path TO tasc_prod')
             column_names = ','.join(df.columns)
             self.cursor.copy_expert(f"copy {table_name}({column_names}) from stdout (format csv)", buffer)
         except Exception as e:
@@ -105,13 +107,13 @@ class NebulaConnector:
         self._close_conn()
 
     def upsert_df(self, table_name: str, df: DataFrame, conflict_columns: list) -> None:
-        """Insert dataframe into tasc-sandbox table and update records if the record already exists (based on conflict_columns).
-        The SQL query used is insipired by: https://stackoverflow.com/a/17267423/1960089
+        """Insert dataframe into tasc_prod table and update records if the record already exists (based on
+        conflict_columns). The SQL query used is inspired by: https://stackoverflow.com/a/17267423/1960089
 
-        Args:
-            table_name (str): name of table in tasc-sandbox, excluding "tasc-sandbox." schema prefix
-            df (DataFrame): dataframe with column headers matching the table headers in the tasc-sandbox table
-            conflict_columns (list): a list of column names (strings) that can be used to uniquely identify which rows to update
+        Args: table_name (str): name of table in tasc_prod, excluding "tasc_prod." schema prefix df (
+        DataFrame): dataframe with column headers matching the table headers in the tasc_prod table
+        conflict_columns (list): a list of column names (strings) that can be used to uniquely identify which rows to
+        update
         """
 
         if df is None:
@@ -124,8 +126,8 @@ class NebulaConnector:
             print('Conflict columns provided must exist in dataframe column headers')
             return None
 
-        # this upload method does not expect the "tasc-sandbox." prefix. Remove it if it exists.
-        table_name = sub("tasc-sandbox.", '', table_name)
+        # this upload method does not expect the "tasc_prod." prefix. Remove it if it exists.
+        table_name = sub("tasc_prod.", '', table_name)
 
         # create temp table
         columns_str = ",".join(columns_list)
@@ -139,17 +141,20 @@ class NebulaConnector:
         insert_to_temp_sql = f"INSERT INTO temp ({columns_str}) VALUES ({values_str[:-1]})"
 
         # lock the target table
-        lock_target_table_sql = f"LOCK TABLE tasc-sandbox.{table_name} IN EXCLUSIVE MODE"
+        lock_target_table_sql = f"LOCK TABLE tasc_prod.{table_name} IN EXCLUSIVE MODE"
 
         # update records where the conflict_columns return a match in the target table
         update_list_str = ", ".join([f'{col}=temp.{col}' for col in update_list])
         conflict_str = " AND ".join([f'{table_name}.{col}=temp.{col}' for col in conflict_columns])
-        update_target_table_sql = f"UPDATE tasc-sandbox.{table_name} SET {update_list_str} FROM temp WHERE {conflict_str}"
+        update_target_table_sql = f"""UPDATE tasc_prod.{table_name} SET {update_list_str} FROM temp 
+                                    WHERE {conflict_str}"""
 
         # insert rows that don't match on conflict cols
         insert_columns_str = ",".join([f'{table_name}.{col}' for col in columns_list])
         null_filter_str = " AND ".join([f"{table_name}.{col} IS NULL" for col in conflict_columns])
-        insert_target_table_sql = f'INSERT INTO tasc-sandbox.{table_name} SELECT {insert_columns_str} FROM temp LEFT OUTER JOIN tasc-sandbox.{table_name} ON ({conflict_str}) WHERE {null_filter_str}'
+        insert_target_table_sql = f"""INSERT INTO tasc_prod.{table_name} SELECT {insert_columns_str} FROM temp 
+                                        LEFT OUTER JOIN tasc_prod.{table_name} ON ({conflict_str}) 
+                                        WHERE {null_filter_str}"""
 
         # drop temp table
         drop_temp_table_sql = 'DROP TABLE temp'
