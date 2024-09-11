@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS tasc_sandbox.tasc_apparel_colour_ruleset CASCADE;
-CREATE TABLE tasc_sandbox.tasc_apparel_colour_ruleset (
+DROP TABLE IF EXISTS tasc_sandbox.apparel_colour_ruleset CASCADE;
+CREATE TABLE tasc_sandbox.apparel_colour_ruleset (
     asof_dt DATE,
     outerwear VARCHAR(255),
     top_1 VARCHAR(255),
