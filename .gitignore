@@ -33,6 +33,7 @@ wheels/
 *.env
 .installed.cfg
 *.egg
+*.pth
 MANIFEST
 
 # PyInstaller
