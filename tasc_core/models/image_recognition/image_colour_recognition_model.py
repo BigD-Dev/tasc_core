@@ -125,11 +125,20 @@ class ImageProcessor:
 if __name__ == "__main__":
     processor = ImageProcessor()
 
-    # Fetch the image from a URL
-    image_url = "https://cdn.shopify.com/s/files/1/0327/7452/0971/files/neptuneteefinal.jpg?v=1720963628"
+    # # Fetch the image from a URL
+    # image_url = "https://cdn.shopify.com/s/files/1/0559/5604/5903/files/NTMRZIPHOODIEFRONT.jpg?v=1722248746"
+    #
+    # try:
+    #     hex_colors = processor.extract_colors(image_url=image_url)
+    #     print(f"Top 3 Dominant Colors (Hex): {hex_colors}")
+    # except Exception as e:
+    #     print(e)
+    #
+    # Fetch the image from a path
+    image_path = "NTMRZIPHOODIEFRONT_op.png"
 
     try:
-        hex_colors = processor.extract_colors(image_url=image_url)
+        hex_colors = processor.extract_colors(image_path=image_path)
         print(f"Top 3 Dominant Colors (Hex): {hex_colors}")
     except Exception as e:
         print(e)
